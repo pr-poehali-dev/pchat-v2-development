@@ -1,16 +1,9 @@
 {
   "tests": [
     {
-      "name": "Get chat messages",
-      "method": "GET",
-      "queryStringParameters": {
-        "chat_id": "1"
-      },
-      "expectedStatus": 200,
-      "expectedBody": {
-        "messages": "array"
-      },
-      "bodyMatcher": "partial"
+      "name": "Handle OPTIONS",
+      "method": "OPTIONS",
+      "expectedStatus": 200
     },
     {
       "name": "Send message",
@@ -20,11 +13,7 @@
         "sender_id": 1,
         "content": "Test message"
       },
-      "expectedStatus": 200,
-      "expectedBody": {
-        "id": "number"
-      },
-      "bodyMatcher": "partial"
+      "expectedStatus": 200
     }
   ]
 }

@@ -6,6 +6,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import Icon from '@/components/ui/icon';
 import { toast } from 'sonner';
 import type { User, Chat } from '@/pages/Index';
+import { useAudioRecorder } from '@/hooks/useAudioRecorder';
+import { VoiceMessagePreview } from '@/components/VoiceMessagePreview';
+import { VoiceMessage } from '@/components/VoiceMessage';
 
 interface Message {
   id: number;
@@ -15,6 +18,8 @@ interface Message {
   content: string;
   photo_url: string | null;
   photo_caption: string | null;
+  voice_url: string | null;
+  voice_duration: number | null;
   is_edited: boolean;
   is_read: boolean;
   is_system: boolean;
@@ -47,6 +52,8 @@ export default function ChatView({ user, chat, onBack }: ChatViewProps) {
   const [showSettings, setShowSettings] = useState(false);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [sending, setSending] = useState(false);
+  const [showVoicePreview, setShowVoicePreview] = useState(false);
+  const { isRecording, recordingTime, audioBlob, startRecording, stopRecording, clearRecording } = useAudioRecorder();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastMessageIdRef = useRef<number>(0);
   const shouldScrollRef = useRef<boolean>(true);
@@ -271,6 +278,50 @@ export default function ChatView({ user, chat, onBack }: ChatViewProps) {
     }
   };
 
+  const handleStartRecording = async () => {
+    await startRecording();
+    toast.info('Запись началась...');
+  };
+
+  const handleStopRecording = () => {
+    stopRecording();
+    setShowVoicePreview(true);
+  };
+
+  const handleSendVoiceMessage = async (caption?: string) => {
+    if (!audioBlob) return;
+
+    setSending(true);
+    setShowVoicePreview(false);
+
+    try {
+      const formData = new FormData();
+      formData.append('audio', audioBlob, 'voice.webm');
+      formData.append('chat_id', chat.id.toString());
+      formData.append('sender_id', user.id.toString());
+      formData.append('duration', recordingTime.toString());
+      if (caption) formData.append('caption', caption);
+
+      await fetch('https://functions.poehali.dev/3c819211-4c93-4d90-a7ff-2493141d605b', {
+        method: 'POST',
+        body: formData
+      });
+
+      clearRecording();
+      await loadMessages();
+      toast.success('Голосовое сообщение отправлено');
+    } catch (error) {
+      toast.error('Ошибка отправки голосового сообщения');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleCancelVoiceMessage = () => {
+    clearRecording();
+    setShowVoicePreview(false);
+  };
+
   const handleRemoveMember = async (memberId: number) => {
     if (!confirm('Удалить участника из группы?')) return;
 
@@ -381,23 +432,33 @@ export default function ChatView({ user, chat, onBack }: ChatViewProps) {
                       : 'bg-card/40 border-border/50 rounded-bl-sm'
                   }`}
                 >
-                  {message.photo_url && message.content !== '[Удалено]' && (
-                    <img
-                      src={message.photo_url}
-                      alt="Photo"
-                      className="rounded-lg mb-2 max-w-full max-h-64 object-cover"
-                      loading="lazy"
+                  {message.voice_url && message.voice_duration && message.content !== '[Удалено]' ? (
+                    <VoiceMessage
+                      voiceUrl={message.voice_url}
+                      duration={message.voice_duration}
+                      caption={message.content || undefined}
                     />
-                  )}
-                  
-                  {message.photo_caption && message.content !== '[Удалено]' && (
-                    <p className="text-sm text-foreground mb-1">{message.photo_caption}</p>
-                  )}
-                  
-                  {message.content && (
-                    <p className={`text-foreground break-words ${message.content === '[Удалено]' ? 'italic text-muted-foreground' : ''}`}>
-                      {message.content}
-                    </p>
+                  ) : (
+                    <>
+                      {message.photo_url && message.content !== '[Удалено]' && (
+                        <img
+                          src={message.photo_url}
+                          alt="Photo"
+                          className="rounded-lg mb-2 max-w-full max-h-64 object-cover"
+                          loading="lazy"
+                        />
+                      )}
+                      
+                      {message.photo_caption && message.content !== '[Удалено]' && (
+                        <p className="text-sm text-foreground mb-1">{message.photo_caption}</p>
+                      )}
+                      
+                      {message.content && (
+                        <p className={`text-foreground break-words ${message.content === '[Удалено]' ? 'italic text-muted-foreground' : ''}`}>
+                          {message.content}
+                        </p>
+                      )}
+                    </>
                   )}
                   
                   <div className="flex items-center gap-2 mt-1 justify-end">
@@ -509,6 +570,16 @@ export default function ChatView({ user, chat, onBack }: ChatViewProps) {
               </div>
             </Button>
           </label>
+
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className={`hover:bg-primary/20 ${isRecording ? 'bg-destructive/20 text-destructive' : ''}`}
+            onClick={isRecording ? handleStopRecording : handleStartRecording}
+          >
+            <Icon name={isRecording ? 'Square' : 'Mic'} size={20} />
+          </Button>
 
           <Input
             placeholder="Сообщение..."
@@ -623,6 +694,15 @@ export default function ChatView({ user, chat, onBack }: ChatViewProps) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {showVoicePreview && audioBlob && (
+        <VoiceMessagePreview
+          audioBlob={audioBlob}
+          recordingTime={recordingTime}
+          onSend={handleSendVoiceMessage}
+          onCancel={handleCancelVoiceMessage}
+        />
+      )}
     </div>
   );
 }
