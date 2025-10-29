@@ -1,0 +1,30 @@
+{
+  "tests": [
+    {
+      "name": "Get user chats",
+      "method": "GET",
+      "queryStringParameters": {
+        "user_id": "1"
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "chats": "array"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Create personal chat",
+      "method": "POST",
+      "body": {
+        "action": "create_personal",
+        "user_id": 1,
+        "other_username": "testuser"
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "chat_id": "number"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}
