@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -22,18 +22,18 @@ interface Message {
   updated_at: string;
 }
 
-interface ChatViewProps {
-  user: User;
-  chat: Chat;
-  onBack: () => void;
-}
-
 interface Participant {
   id: number;
   username: string;
   nickname: string;
   avatar: string | null;
   is_creator: boolean;
+}
+
+interface ChatViewProps {
+  user: User;
+  chat: Chat;
+  onBack: () => void;
 }
 
 export default function ChatView({ user, chat, onBack }: ChatViewProps) {
@@ -46,32 +46,87 @@ export default function ChatView({ user, chat, onBack }: ChatViewProps) {
   const [showParticipants, setShowParticipants] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [participants, setParticipants] = useState<Participant[]>([]);
+  const [sending, setSending] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const lastMessageIdRef = useRef<number>(0);
+  const shouldScrollRef = useRef<boolean>(true);
 
-  const loadMessages = async () => {
+  const scrollToBottom = (behavior: 'auto' | 'smooth' = 'smooth') => {
+    if (shouldScrollRef.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior });
+    }
+  };
+
+  const loadMessages = useCallback(async () => {
     try {
       const response = await fetch(
         `https://functions.poehali.dev/3c819211-4c93-4d90-a7ff-2493141d605b?chat_id=${chat.id}`
       );
       const data = await response.json();
-      setMessages(data.messages || []);
+      const newMessages = data.messages || [];
+      
+      setMessages(prevMessages => {
+        const lastId = prevMessages.length > 0 ? prevMessages[prevMessages.length - 1]?.id : 0;
+        const newLastId = newMessages.length > 0 ? newMessages[newMessages.length - 1]?.id : 0;
+        
+        if (newLastId > lastId) {
+          shouldScrollRef.current = true;
+          lastMessageIdRef.current = newLastId;
+        }
+        
+        return newMessages;
+      });
     } catch (error) {
       console.error('Failed to load messages:', error);
     }
-  };
-
-  useEffect(() => {
-    loadMessages();
-    const interval = setInterval(loadMessages, 2000);
-    return () => clearInterval(interval);
   }, [chat.id]);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    loadMessages();
+    const interval = setInterval(loadMessages, 1000);
+    return () => clearInterval(interval);
+  }, [loadMessages]);
+
+  useEffect(() => {
+    scrollToBottom('auto');
+  }, []);
+
+  useEffect(() => {
+    if (messages.length > 0 && shouldScrollRef.current) {
+      scrollToBottom('smooth');
+    }
   }, [messages]);
 
   const handleSendMessage = async () => {
     if (!newMessage.trim() && !photoPreview) return;
+    if (sending) return;
+
+    setSending(true);
+    shouldScrollRef.current = true;
+
+    const tempMessage: Message = {
+      id: Date.now(),
+      sender_id: user.id,
+      sender_nickname: user.nickname,
+      sender_username: user.username,
+      content: newMessage,
+      photo_url: photoPreview,
+      photo_caption: photoCaption,
+      is_edited: false,
+      is_read: false,
+      is_system: false,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    setMessages(prev => [...prev, tempMessage]);
+    const messageText = newMessage;
+    const messagePhoto = photoPreview;
+    const messageCaption = photoCaption;
+    
+    setNewMessage('');
+    setPhotoPreview(null);
+    setPhotoCaption('');
 
     try {
       await fetch('https://functions.poehali.dev/3c819211-4c93-4d90-a7ff-2493141d605b', {
@@ -80,23 +135,29 @@ export default function ChatView({ user, chat, onBack }: ChatViewProps) {
         body: JSON.stringify({
           chat_id: chat.id,
           sender_id: user.id,
-          content: newMessage,
-          photo_url: photoPreview,
-          photo_caption: photoCaption
+          content: messageText,
+          photo_url: messagePhoto,
+          photo_caption: messageCaption
         })
       });
 
-      setNewMessage('');
-      setPhotoPreview(null);
-      setPhotoCaption('');
       await loadMessages();
     } catch (error) {
       toast.error('Ошибка отправки');
+      setMessages(prev => prev.filter(m => m.id !== tempMessage.id));
+      setNewMessage(messageText);
+      setPhotoPreview(messagePhoto);
+      setPhotoCaption(messageCaption);
+    } finally {
+      setSending(false);
     }
   };
 
   const handleEditMessage = async () => {
     if (!editingMessage || !newMessage.trim()) return;
+    if (sending) return;
+
+    setSending(true);
 
     try {
       await fetch('https://functions.poehali.dev/3c819211-4c93-4d90-a7ff-2493141d605b', {
@@ -109,12 +170,20 @@ export default function ChatView({ user, chat, onBack }: ChatViewProps) {
         })
       });
 
+      setMessages(prev => prev.map(m => 
+        m.id === editingMessage.id 
+          ? { ...m, content: newMessage, is_edited: true, updated_at: new Date().toISOString() }
+          : m
+      ));
+
       setEditingMessage(null);
       setNewMessage('');
-      await loadMessages();
       toast.success('Сообщение изменено');
+      await loadMessages();
     } catch (error) {
       toast.error('Ошибка редактирования');
+    } finally {
+      setSending(false);
     }
   };
 
@@ -126,9 +195,15 @@ export default function ChatView({ user, chat, onBack }: ChatViewProps) {
         body: JSON.stringify({ message_id: messageId })
       });
 
-      await loadMessages();
+      setMessages(prev => prev.map(m => 
+        m.id === messageId 
+          ? { ...m, content: '[Удалено]', photo_url: null, photo_caption: null }
+          : m
+      ));
+
       setSelectedMessage(null);
       toast.success('Сообщение удалено');
+      await loadMessages();
     } catch (error) {
       toast.error('Ошибка удаления');
     }
@@ -142,6 +217,11 @@ export default function ChatView({ user, chat, onBack }: ChatViewProps) {
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error('Файл слишком большой (макс. 5МБ)');
+        return;
+      }
+
       const reader = new FileReader();
       reader.onloadend = () => {
         setPhotoPreview(reader.result as string);
@@ -213,6 +293,12 @@ export default function ChatView({ user, chat, onBack }: ChatViewProps) {
     }
   }, [chat.id, chat.is_group]);
 
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const element = e.currentTarget;
+    const isNearBottom = element.scrollHeight - element.scrollTop - element.clientHeight < 100;
+    shouldScrollRef.current = isNearBottom;
+  };
+
   return (
     <div className="h-screen flex flex-col bg-background/95 backdrop-blur-xl">
       <div className="p-4 border-b border-border/50 bg-card/40 backdrop-blur flex items-center gap-3">
@@ -248,7 +334,7 @@ export default function ChatView({ user, chat, onBack }: ChatViewProps) {
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="flex-1 overflow-y-auto p-4 space-y-3" onScroll={handleScroll}>
         {messages.map((message) => {
           const isOwn = message.sender_id === user.id;
           
@@ -265,9 +351,9 @@ export default function ChatView({ user, chat, onBack }: ChatViewProps) {
           return (
             <div
               key={message.id}
-              className={`flex ${isOwn ? 'justify-end' : 'justify-start'} group`}
+              className={`flex ${isOwn ? 'justify-end' : 'justify-start'} group animate-fade-in`}
               onContextMenu={(e) => {
-                if (isOwn && !message.is_system) {
+                if (isOwn && !message.is_system && message.content !== '[Удалено]') {
                   e.preventDefault();
                   setSelectedMessage(message);
                 }
@@ -285,30 +371,33 @@ export default function ChatView({ user, chat, onBack }: ChatViewProps) {
                       : 'bg-card/40 border-border/50 rounded-bl-sm'
                   }`}
                 >
-                  {message.photo_url && (
+                  {message.photo_url && message.content !== '[Удалено]' && (
                     <img
                       src={message.photo_url}
                       alt="Photo"
-                      className="rounded-lg mb-2 max-w-full"
+                      className="rounded-lg mb-2 max-w-full max-h-64 object-cover"
+                      loading="lazy"
                     />
                   )}
                   
-                  {message.photo_caption && (
+                  {message.photo_caption && message.content !== '[Удалено]' && (
                     <p className="text-sm text-foreground mb-1">{message.photo_caption}</p>
                   )}
                   
                   {message.content && (
-                    <p className="text-foreground break-words">{message.content}</p>
+                    <p className={`text-foreground break-words ${message.content === '[Удалено]' ? 'italic text-muted-foreground' : ''}`}>
+                      {message.content}
+                    </p>
                   )}
                   
                   <div className="flex items-center gap-2 mt-1 justify-end">
                     <span className="text-xs text-muted-foreground">
                       {formatTime(message.created_at)}
                     </span>
-                    {message.is_edited && (
+                    {message.is_edited && message.content !== '[Удалено]' && (
                       <span className="text-xs text-muted-foreground italic">изм.</span>
                     )}
-                    {isOwn && (
+                    {isOwn && message.content !== '[Удалено]' && (
                       <Icon
                         name={message.is_read ? 'CheckCheck' : 'Check'}
                         size={14}
@@ -318,7 +407,7 @@ export default function ChatView({ user, chat, onBack }: ChatViewProps) {
                   </div>
                 </div>
 
-                {isOwn && (
+                {isOwn && message.content !== '[Удалено]' && (
                   <div className="opacity-0 group-hover:opacity-100 transition-opacity mt-1 flex gap-2">
                     <Button
                       size="sm"
@@ -422,12 +511,13 @@ export default function ChatView({ user, chat, onBack }: ChatViewProps) {
               }
             }}
             className="flex-1 bg-background/50 backdrop-blur"
+            disabled={sending}
           />
 
           <Button
             onClick={editingMessage ? handleEditMessage : handleSendMessage}
             className="bg-primary hover:bg-primary/90"
-            disabled={!newMessage.trim() && !photoPreview}
+            disabled={(!newMessage.trim() && !photoPreview) || sending}
           >
             <Icon name="Send" size={20} />
           </Button>
