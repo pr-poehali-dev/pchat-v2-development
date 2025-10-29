@@ -50,6 +50,12 @@ export default function ChatView({ user, chat, onBack }: ChatViewProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastMessageIdRef = useRef<number>(0);
   const shouldScrollRef = useRef<boolean>(true);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    audioRef.current = new Audio('/notification.mp3');
+    audioRef.current.volume = 0.5;
+  }, []);
 
   const scrollToBottom = (behavior: 'auto' | 'smooth' = 'smooth') => {
     if (shouldScrollRef.current) {
@@ -72,6 +78,11 @@ export default function ChatView({ user, chat, onBack }: ChatViewProps) {
         if (newLastId > lastId) {
           shouldScrollRef.current = true;
           lastMessageIdRef.current = newLastId;
+          
+          const lastMessage = newMessages[newMessages.length - 1];
+          if (lastMessage && lastMessage.sender_id !== user.id && !lastMessage.is_system) {
+            audioRef.current?.play().catch(() => {});
+          }
         }
         
         return newMessages;
@@ -79,7 +90,7 @@ export default function ChatView({ user, chat, onBack }: ChatViewProps) {
     } catch (error) {
       console.error('Failed to load messages:', error);
     }
-  }, [chat.id]);
+  }, [chat.id, user.id]);
 
   useEffect(() => {
     loadMessages();
@@ -195,12 +206,7 @@ export default function ChatView({ user, chat, onBack }: ChatViewProps) {
         body: JSON.stringify({ message_id: messageId })
       });
 
-      setMessages(prev => prev.map(m => 
-        m.id === messageId 
-          ? { ...m, content: '[Удалено]', photo_url: null, photo_caption: null }
-          : m
-      ));
-
+      setMessages(prev => prev.filter(m => m.id !== messageId));
       setSelectedMessage(null);
       toast.success('Сообщение удалено');
       await loadMessages();
@@ -288,10 +294,10 @@ export default function ChatView({ user, chat, onBack }: ChatViewProps) {
   };
 
   useEffect(() => {
-    if (chat.is_group) {
+    if (chat.is_group && showParticipants) {
       loadParticipants();
     }
-  }, [chat.id, chat.is_group]);
+  }, [chat.id, chat.is_group, showParticipants]);
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const element = e.currentTarget;
@@ -307,9 +313,13 @@ export default function ChatView({ user, chat, onBack }: ChatViewProps) {
         </Button>
 
         <Avatar className="w-10 h-10 border-2 border-primary/30">
-          <AvatarFallback className="bg-gradient-to-br from-primary to-accent text-primary-foreground">
-            {chat.name?.charAt(0).toUpperCase() || '?'}
-          </AvatarFallback>
+          {chat.avatar ? (
+            <img src={chat.avatar} alt={chat.name} className="w-full h-full object-cover" />
+          ) : (
+            <AvatarFallback className="bg-gradient-to-br from-primary to-accent text-primary-foreground">
+              {chat.name?.charAt(0).toUpperCase() || '?'}
+            </AvatarFallback>
+          )}
         </Avatar>
 
         <div className="flex-1">
@@ -353,7 +363,7 @@ export default function ChatView({ user, chat, onBack }: ChatViewProps) {
               key={message.id}
               className={`flex ${isOwn ? 'justify-end' : 'justify-start'} group animate-fade-in`}
               onContextMenu={(e) => {
-                if (isOwn && !message.is_system && message.content !== '[Удалено]') {
+                if (isOwn && !message.is_system) {
                   e.preventDefault();
                   setSelectedMessage(message);
                 }
@@ -407,7 +417,7 @@ export default function ChatView({ user, chat, onBack }: ChatViewProps) {
                   </div>
                 </div>
 
-                {isOwn && message.content !== '[Удалено]' && (
+                {isOwn && (
                   <div className="opacity-0 group-hover:opacity-100 transition-opacity mt-1 flex gap-2">
                     <Button
                       size="sm"

@@ -223,11 +223,27 @@ export default function ProfileSettings({
             <Button
               variant="destructive"
               className="w-full"
-              onClick={() => {
+              onClick={async () => {
                 if (confirm('Вы уверены, что хотите удалить аккаунт? Это действие необратимо.')) {
-                  toast.error('Функция удаления аккаунта пока недоступна');
+                  try {
+                    const response = await fetch('https://functions.poehali.dev/25098e9f-957d-48bd-8f99-07459fab8fe9', {
+                      method: 'DELETE',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ user_id: user.id })
+                    });
+
+                    if (response.ok) {
+                      toast.success('Аккаунт удален');
+                      onLogout();
+                    } else {
+                      toast.error('Ошибка удаления');
+                    }
+                  } catch (error) {
+                    toast.error('Ошибка соединения');
+                  }
                 }
               }}
+              disabled={loading}
             >
               <Icon name="Trash2" size={18} className="mr-2" />
               Удалить аккаунт

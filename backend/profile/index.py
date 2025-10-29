@@ -31,7 +31,8 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     try:
         if method == 'GET':
             # Get user profile
-            user_id = event.get('queryStringParameters', {}).get('user_id')
+            params = event.get('queryStringParameters') or {}
+            user_id = params.get('user_id')
             
             if not user_id:
                 return {
@@ -41,7 +42,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 }
             
             cur.execute(
-                "SELECT id, username, nickname, avatar, theme, hide_online_status FROM users WHERE id = %s",
+                "SELECT id, username, nickname, avatar, theme, hide_online_status FROM users WHERE id = CAST(%s AS INTEGER)",
                 (user_id,)
             )
             user = cur.fetchone()
@@ -132,6 +133,28 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                     'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
                     'body': json.dumps({'success': True})
                 }
+        
+        elif method == 'DELETE':
+            body_data = json.loads(event.get('body', '{}'))
+            user_id = body_data.get('user_id')
+            
+            if not user_id:
+                return {
+                    'statusCode': 400,
+                    'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                    'body': json.dumps({'error': 'user_id required'})
+                }
+            
+            cur.execute("DELETE FROM chat_participants WHERE user_id = %s", (user_id,))
+            cur.execute("DELETE FROM messages WHERE sender_id = %s", (user_id,))
+            cur.execute("DELETE FROM users WHERE id = %s", (user_id,))
+            conn.commit()
+            
+            return {
+                'statusCode': 200,
+                'headers': {'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps({'success': True, 'message': 'Account deleted'})
+            }
         
         return {
             'statusCode': 400,

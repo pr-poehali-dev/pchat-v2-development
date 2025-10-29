@@ -189,9 +189,13 @@ export default function ChatList({ user, onSelectChat, onLogout, activeChat }: C
               }`}
             >
               <Avatar className="w-12 h-12 border-2 border-primary/30">
-                <AvatarFallback className="bg-gradient-to-br from-primary to-accent text-primary-foreground">
-                  {chat.name?.charAt(0).toUpperCase() || '?'}
-                </AvatarFallback>
+                {chat.avatar ? (
+                  <img src={chat.avatar} alt={chat.name} className="w-full h-full object-cover" />
+                ) : (
+                  <AvatarFallback className="bg-gradient-to-br from-primary to-accent text-primary-foreground">
+                    {chat.name?.charAt(0).toUpperCase() || '?'}
+                  </AvatarFallback>
+                )}
               </Avatar>
 
               <div className="flex-1 text-left min-w-0">

@@ -3,14 +3,12 @@
     {
       "name": "Get user profile",
       "method": "GET",
-      "queryStringParameters": {
-        "user_id": "1"
-      },
+      "path": "/?user_id=1",
       "expectedStatus": 200,
       "expectedBody": {
-        "id": "number",
-        "username": "string",
-        "nickname": "string"
+        "id": 1,
+        "username": "testuser123",
+        "nickname": "New Name"
       },
       "bodyMatcher": "partial"
     },
