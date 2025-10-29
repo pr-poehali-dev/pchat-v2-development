@@ -17,6 +17,7 @@ interface Message {
   photo_caption: string | null;
   is_edited: boolean;
   is_read: boolean;
+  is_system: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -27,6 +28,14 @@ interface ChatViewProps {
   onBack: () => void;
 }
 
+interface Participant {
+  id: number;
+  username: string;
+  nickname: string;
+  avatar: string | null;
+  is_creator: boolean;
+}
+
 export default function ChatView({ user, chat, onBack }: ChatViewProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
@@ -34,6 +43,9 @@ export default function ChatView({ user, chat, onBack }: ChatViewProps) {
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoCaption, setPhotoCaption] = useState('');
   const [selectedMessage, setSelectedMessage] = useState<Message | null>(null);
+  const [showParticipants, setShowParticipants] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [participants, setParticipants] = useState<Participant[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const loadMessages = async () => {
@@ -138,6 +150,69 @@ export default function ChatView({ user, chat, onBack }: ChatViewProps) {
     }
   };
 
+  const loadParticipants = async () => {
+    if (!chat.is_group) return;
+    
+    try {
+      const response = await fetch(
+        `https://functions.poehali.dev/0626e1aa-311f-4d69-8a75-88cbee535b25?chat_id=${chat.id}`
+      );
+      const data = await response.json();
+      setParticipants(data.participants || []);
+    } catch (error) {
+      console.error('Failed to load participants:', error);
+    }
+  };
+
+  const handleLeaveGroup = async () => {
+    if (!confirm('Вы уверены, что хотите покинуть группу?')) return;
+
+    try {
+      await fetch('https://functions.poehali.dev/0626e1aa-311f-4d69-8a75-88cbee535b25', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'leave',
+          chat_id: chat.id,
+          user_id: user.id
+        })
+      });
+
+      toast.success('Вы покинули группу');
+      onBack();
+    } catch (error) {
+      toast.error('Ошибка выхода');
+    }
+  };
+
+  const handleRemoveMember = async (memberId: number) => {
+    if (!confirm('Удалить участника из группы?')) return;
+
+    try {
+      await fetch('https://functions.poehali.dev/0626e1aa-311f-4d69-8a75-88cbee535b25', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'remove_member',
+          chat_id: chat.id,
+          user_id: user.id,
+          member_id: memberId
+        })
+      });
+
+      toast.success('Участник удален');
+      loadParticipants();
+    } catch (error) {
+      toast.error('Ошибка удаления');
+    }
+  };
+
+  useEffect(() => {
+    if (chat.is_group) {
+      loadParticipants();
+    }
+  }, [chat.id, chat.is_group]);
+
   return (
     <div className="h-screen flex flex-col bg-background/95 backdrop-blur-xl">
       <div className="p-4 border-b border-border/50 bg-card/40 backdrop-blur flex items-center gap-3">
@@ -155,18 +230,44 @@ export default function ChatView({ user, chat, onBack }: ChatViewProps) {
           <h2 className="font-semibold text-foreground">{chat.name || 'Чат'}</h2>
           {chat.is_group && <p className="text-xs text-muted-foreground">Группа</p>}
         </div>
+
+        {chat.is_group && (
+          <div className="flex gap-2">
+            {chat.creator_id === user.id && (
+              <Button variant="ghost" size="icon" onClick={() => setShowSettings(true)}>
+                <Icon name="Settings" size={20} />
+              </Button>
+            )}
+            <Button variant="ghost" size="icon" onClick={() => setShowParticipants(true)}>
+              <Icon name="Users" size={20} />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={handleLeaveGroup} className="hover:bg-destructive/20">
+              <Icon name="LogOut" size={20} />
+            </Button>
+          </div>
+        )}
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
         {messages.map((message) => {
           const isOwn = message.sender_id === user.id;
           
+          if (message.is_system) {
+            return (
+              <div key={message.id} className="flex justify-center">
+                <div className="bg-muted/30 backdrop-blur-xl rounded-full px-4 py-2">
+                  <p className="text-xs text-muted-foreground text-center">{message.content}</p>
+                </div>
+              </div>
+            );
+          }
+          
           return (
             <div
               key={message.id}
               className={`flex ${isOwn ? 'justify-end' : 'justify-start'} group`}
               onContextMenu={(e) => {
-                if (isOwn) {
+                if (isOwn && !message.is_system) {
                   e.preventDefault();
                   setSelectedMessage(message);
                 }
@@ -174,7 +275,7 @@ export default function ChatView({ user, chat, onBack }: ChatViewProps) {
             >
               <div className={`max-w-[70%] ${isOwn ? 'items-end' : 'items-start'} flex flex-col`}>
                 {chat.is_group && !isOwn && (
-                  <span className="text-xs text-accent mb-1 px-2">{message.sender_nickname}</span>
+                  <span className="text-xs text-accent mb-1 px-2 font-medium">{message.sender_nickname}</span>
                 )}
                 
                 <div
@@ -364,6 +465,61 @@ export default function ChatView({ user, chat, onBack }: ChatViewProps) {
               <Icon name="Trash2" size={18} className="mr-2" />
               Удалить
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showParticipants} onOpenChange={setShowParticipants}>
+        <DialogContent className="bg-card/95 backdrop-blur-xl border-border/50">
+          <DialogHeader>
+            <DialogTitle>Участники группы</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 max-h-96 overflow-y-auto">
+            {participants.map((participant) => (
+              <div key={participant.id} className="flex items-center gap-3 p-3 rounded-lg bg-background/30">
+                <Avatar className="w-10 h-10 border-2 border-primary/30">
+                  {participant.avatar ? (
+                    <img src={participant.avatar} alt={participant.nickname} />
+                  ) : (
+                    <AvatarFallback className="bg-gradient-to-br from-primary to-accent text-primary-foreground">
+                      {participant.nickname.charAt(0).toUpperCase()}
+                    </AvatarFallback>
+                  )}
+                </Avatar>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium text-foreground">{participant.nickname}</p>
+                    {participant.is_creator && (
+                      <Icon name="Crown" size={14} className="text-accent" />
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground">@{participant.username}</p>
+                </div>
+                {chat.creator_id === user.id && !participant.is_creator && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => handleRemoveMember(participant.id)}
+                    className="hover:bg-destructive/20"
+                  >
+                    <Icon name="X" size={16} />
+                  </Button>
+                )}
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={showSettings} onOpenChange={setShowSettings}>
+        <DialogContent className="bg-card/95 backdrop-blur-xl border-border/50">
+          <DialogHeader>
+            <DialogTitle>Настройки группы</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Функции управления группой скоро будут доступны
+            </p>
           </div>
         </DialogContent>
       </Dialog>

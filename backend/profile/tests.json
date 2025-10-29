@@ -1,0 +1,32 @@
+{
+  "tests": [
+    {
+      "name": "Get user profile",
+      "method": "GET",
+      "queryStringParameters": {
+        "user_id": "1"
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "id": "number",
+        "username": "string",
+        "nickname": "string"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Update nickname",
+      "method": "PUT",
+      "body": {
+        "action": "update_nickname",
+        "user_id": 1,
+        "nickname": "New Name"
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "success": true
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

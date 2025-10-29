@@ -1,0 +1,30 @@
+{
+  "tests": [
+    {
+      "name": "Get group participants",
+      "method": "GET",
+      "queryStringParameters": {
+        "chat_id": "1"
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "participants": "array"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Leave group",
+      "method": "POST",
+      "body": {
+        "action": "leave",
+        "chat_id": 1,
+        "user_id": 1
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "success": true
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}

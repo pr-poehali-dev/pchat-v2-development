@@ -46,7 +46,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                        (SELECT created_at FROM messages WHERE chat_id = c.id ORDER BY created_at DESC LIMIT 1) as last_message_time
                 FROM chats c
                 JOIN chat_participants cp ON c.id = cp.chat_id
-                WHERE cp.user_id = %s
+                WHERE cp.user_id = %s AND cp.left_at IS NULL
                 ORDER BY last_message_time DESC NULLS LAST
             """, (user_id,))
             

@@ -5,6 +5,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import Icon from '@/components/ui/icon';
 import { toast } from 'sonner';
+import CreateGroupDialog from '@/components/CreateGroupDialog';
+import ProfileSettings from '@/components/ProfileSettings';
 import type { User, Chat } from '@/pages/Index';
 
 interface ChatListProps {
@@ -18,7 +20,10 @@ export default function ChatList({ user, onSelectChat, onLogout, activeChat }: C
   const [chats, setChats] = useState<Chat[]>([]);
   const [newChatUsername, setNewChatUsername] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isGroupDialogOpen, setIsGroupDialogOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [currentUser, setCurrentUser] = useState(user);
 
   const loadChats = async () => {
     try {
@@ -104,10 +109,10 @@ export default function ChatList({ user, onSelectChat, onLogout, activeChat }: C
           <Button
             variant="ghost"
             size="icon"
-            onClick={onLogout}
-            className="hover:bg-destructive/20"
+            onClick={() => setIsSettingsOpen(true)}
+            className="hover:bg-primary/20"
           >
-            <Icon name="LogOut" size={20} />
+            <Icon name="Settings" size={20} />
           </Button>
         </div>
 
@@ -141,10 +146,32 @@ export default function ChatList({ user, onSelectChat, onLogout, activeChat }: C
             </DialogContent>
           </Dialog>
 
-          <Button className="bg-accent/20 hover:bg-accent/30 text-foreground border border-accent/50">
+          <Button 
+            onClick={() => setIsGroupDialogOpen(true)}
+            className="bg-accent/20 hover:bg-accent/30 text-foreground border border-accent/50"
+          >
             <Icon name="Users" size={18} />
           </Button>
         </div>
+        
+        <CreateGroupDialog
+          open={isGroupDialogOpen}
+          onOpenChange={setIsGroupDialogOpen}
+          user={currentUser}
+          chats={chats}
+          onGroupCreated={loadChats}
+        />
+        
+        <ProfileSettings
+          open={isSettingsOpen}
+          onOpenChange={setIsSettingsOpen}
+          user={currentUser}
+          onUpdate={(updatedUser) => {
+            setCurrentUser(updatedUser);
+            localStorage.setItem('pchat_user', JSON.stringify(updatedUser));
+          }}
+          onLogout={onLogout}
+        />
       </div>
 
       <div className="flex-1 overflow-y-auto">
