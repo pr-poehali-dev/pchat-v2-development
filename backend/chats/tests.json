@@ -4,7 +4,7 @@
       "name": "Get user chats",
       "method": "GET",
       "queryStringParameters": {
-        "user_id": "1"
+        "user_id": "2"
       },
       "expectedStatus": 200,
       "expectedBody": {
@@ -17,8 +17,8 @@
       "method": "POST",
       "body": {
         "action": "create_personal",
-        "user_id": 1,
-        "other_username": "testuser"
+        "user_id": 2,
+        "other_username": "testuser123"
       },
       "expectedStatus": 200,
       "expectedBody": {

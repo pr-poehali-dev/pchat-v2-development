@@ -27,13 +27,26 @@ export default function ChatList({ user, onSelectChat, onLogout, activeChat }: C
 
   const loadChats = async () => {
     try {
-      const response = await fetch(
-        `https://functions.poehali.dev/eb5187df-736f-4f3f-ab42-b9ea5b5b4e7c?user_id=${user.id}`
-      );
+      const url = `https://functions.poehali.dev/eb5187df-736f-4f3f-ab42-b9ea5b5b4e7c?user_id=${user.id}`;
+      console.log('Fetching chats from:', url);
+      
+      const response = await fetch(url);
+      console.log('Response status:', response.status);
+      console.log('Response ok:', response.ok);
+      
+      if (!response.ok) {
+        const text = await response.text();
+        console.error('Response error:', text);
+        toast.error('Ошибка загрузки чатов');
+        return;
+      }
+      
       const data = await response.json();
+      console.log('Chats loaded:', data);
       setChats(data.chats || []);
     } catch (error) {
-      console.error('Failed to load chats:', error);
+      console.error('Fetch error:', error, 'for', `https://functions.poehali.dev/eb5187df-736f-4f3f-ab42-b9ea5b5b4e7c?user_id=${user.id}`);
+      toast.error('Ошибка сети');
     }
   };
 
