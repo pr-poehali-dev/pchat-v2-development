@@ -132,10 +132,7 @@ export default function ChatList({ user, onSelectChat, onLogout, activeChat }: C
         <div className="flex gap-2">
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="flex-1 bg-primary/20 hover:bg-primary/30 text-foreground border border-primary/50">
-                <Icon name="UserPlus" size={18} className="mr-2" />
-                Новый чат
-              </Button>
+              <Button className="flex-1 bg-primary/20 hover:bg-primary/30 text-foreground border border-primary/50">Новый чат (ЛС)</Button>
             </DialogTrigger>
             <DialogContent className="bg-card/95 backdrop-blur-xl border-border/50">
               <DialogHeader>
